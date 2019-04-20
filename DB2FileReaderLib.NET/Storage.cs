@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -8,8 +10,10 @@ using DB2FileReaderLib.NET.Attributes;
 
 namespace DB2FileReaderLib.NET
 {
-    public class Storage<T> : ConcurrentDictionary<int, T> where T : class, new()
+    public class Storage<T> : IReadOnlyDictionary<int, T> where T : class, new()
     {
+        private SortedDictionary<int, T> Dictionary;
+
         public Storage(string fileName)
         {
             DB2Reader reader;
@@ -66,14 +70,36 @@ namespace DB2FileReaderLib.NET
                 fieldCache[i] = new FieldCache<T>(fields[i], fields[i].FieldType.IsArray, fields[i].GetSetter<T>(), indexMapAttribute, cardinality);
             }
 
+            var temp = new ConcurrentDictionary<int, T>(Environment.ProcessorCount, reader.RecordsCount);
             Parallel.ForEach(reader.AsEnumerable(), row =>
             {
                 T entry = new T();
-
                 row.Value.GetFields(fieldCache, entry);
-
-                TryAdd(row.Value.Id, entry);
+                temp.TryAdd(row.Value.Id, entry);
             });
+
+            Dictionary = new SortedDictionary<int, T>(temp);
         }
+
+
+        #region Interface
+
+        public T this[int key] => Dictionary[key];
+
+        public IEnumerable<int> Keys => Dictionary.Keys;
+
+        public IEnumerable<T> Values => Dictionary.Values;
+
+        public int Count => Dictionary.Count;
+
+        public bool ContainsKey(int key) => Dictionary.ContainsKey(key);
+
+        public IEnumerator<KeyValuePair<int, T>> GetEnumerator() => Dictionary.GetEnumerator();
+
+        public bool TryGetValue(int key, out T value) => Dictionary.TryGetValue(key, out value);
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        #endregion
     }
 }

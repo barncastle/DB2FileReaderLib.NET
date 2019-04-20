@@ -10,17 +10,17 @@ namespace DB2FileReaderLib.NET
     {
         private BitReader m_data;
         private DB2Reader m_reader;
-        private int m_dataOffset;
-        private int m_recordsOffset;
-        private int m_recordIndex;
+        private readonly int m_dataOffset;
+        private readonly int m_recordsOffset;
+        private readonly int m_recordIndex;
 
         public int Id { get; set; }
         public BitReader Data { get => m_data; set => m_data = value; }
 
-        private FieldMetaData[] m_fieldMeta;
-        private ColumnMetaData[] m_columnMeta;
-        private Value32[][] m_palletData;
-        private Dictionary<int, Value32>[] m_commonData;
+        private readonly FieldMetaData[] m_fieldMeta;
+        private readonly ColumnMetaData[] m_columnMeta;
+        private readonly Value32[][] m_palletData;
+        private readonly Dictionary<int, Value32>[] m_commonData;
         private ReferenceEntry? m_refData;
 
         public WDC2Row(DB2Reader reader, BitReader data, int recordsOffset, int id, ReferenceEntry? refData, int recordIndex)
@@ -225,6 +225,7 @@ namespace DB2FileReaderLib.NET
     {
         private const int HeaderSize = 72;
         private const uint WDC2FmtSig = 0x32434457; // WDC2
+        private const uint CLS1FmtSig = 0x434C5331; // CLS1
 
         public WDC2Reader(string dbcFile) : this(new FileStream(dbcFile, FileMode.Open)) { }
 
@@ -237,7 +238,7 @@ namespace DB2FileReaderLib.NET
 
                 uint magic = reader.ReadUInt32();
 
-                if (magic != WDC2FmtSig)
+                if (magic != WDC2FmtSig && magic != CLS1FmtSig)
                     throw new InvalidDataException(String.Format("WDC2 file is corrupted!"));
 
                 RecordsCount = reader.ReadInt32();
@@ -396,7 +397,7 @@ namespace DB2FileReaderLib.NET
                         IDB2Row rec = new WDC2Row(this, bitReader, sections[sectionIndex].FileOffset, indexDataNotEmpty ? m_indexData[i] : -1, refData?.Entries.ElementAtOrDefault(i), i);
 
                         if (indexDataNotEmpty)
-                            _Records.Add((int)m_indexData[i], rec);
+                            _Records.Add(m_indexData[i], rec);
                         else
                             _Records.Add(rec.Id, rec);
                     }

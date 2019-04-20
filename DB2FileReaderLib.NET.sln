@@ -3,7 +3,14 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27428.2027
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DB2FileReaderLib.NET", "DB2FileReaderLib.NET\DB2FileReaderLib.NET.csproj", "{B7C4440C-CE8F-4EC1-9793-61958F2265DF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DB2FileReaderLib.NET", "DB2FileReaderLib.NET\DB2FileReaderLib.NET.csproj", "{B7C4440C-CE8F-4EC1-9793-61958F2265DF}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "Tests\Tests.csproj", "{039E927B-A03F-4C55-8696-557A4C78F857}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{D1DCBEE5-9603-4919-BC44-9FE8B28C6489}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,10 +22,10 @@ Global
 		{B7C4440C-CE8F-4EC1-9793-61958F2265DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B7C4440C-CE8F-4EC1-9793-61958F2265DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B7C4440C-CE8F-4EC1-9793-61958F2265DF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E01C8B4A-B0C0-4ED7-A868-3B675883D148}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E01C8B4A-B0C0-4ED7-A868-3B675883D148}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E01C8B4A-B0C0-4ED7-A868-3B675883D148}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E01C8B4A-B0C0-4ED7-A868-3B675883D148}.Release|Any CPU.Build.0 = Release|Any CPU
+		{039E927B-A03F-4C55-8696-557A4C78F857}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{039E927B-A03F-4C55-8696-557A4C78F857}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{039E927B-A03F-4C55-8696-557A4C78F857}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{039E927B-A03F-4C55-8696-557A4C78F857}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

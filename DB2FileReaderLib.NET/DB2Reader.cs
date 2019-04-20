@@ -123,7 +123,9 @@ namespace DB2FileReaderLib.NET
 
     public struct Value32
     {
-        unsafe fixed byte Value[4];
+#pragma warning disable IDE0044 // Add readonly modifier
+        public unsafe fixed byte Value[4];
+#pragma warning restore IDE0044 // Add readonly modifier
 
         public T GetValue<T>() where T : struct
         {
@@ -137,7 +139,9 @@ namespace DB2FileReaderLib.NET
 
     public struct Value64
     {
+#pragma warning disable IDE0044 // Add readonly modifier
         unsafe fixed byte Value[8];
+#pragma warning restore IDE0044 // Add readonly modifier
 
         public T GetValue<T>() where T : struct
         {
@@ -173,14 +177,15 @@ namespace DB2FileReaderLib.NET
         public ReferenceEntry[] Entries { get; set; }
     }
 
+    [Flags]
     public enum DB2Flags
     {
-        None         = 0x0,
-        Sparse       = 0x1,
+        None = 0x0,
+        Sparse = 0x1,
         SecondaryKey = 0x2,
-        Index        = 0x4,
-        Unknown1     = 0x8,
-        Unknown2     = 0x10
+        Index = 0x4,
+        Unknown1 = 0x8,
+        Unknown2 = 0x10
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 2)]
@@ -219,17 +224,14 @@ namespace DB2FileReaderLib.NET
 
     public class BitReader
     {
-        private byte[] m_array;
+        private readonly byte[] m_array;
         private int m_readPos;
         private int m_readOffset;
 
         public int Position { get => m_readPos; set => m_readPos = value; }
         public int Offset { get => m_readOffset; set => m_readOffset = value; }
 
-        public BitReader(byte[] data)
-        {
-            m_array = data;
-        }
+        public BitReader(byte[] data) => m_array = data;
 
         public BitReader(byte[] data, int offset)
         {

@@ -1,10 +1,10 @@
-﻿using DB2FileReaderLib.NET.Attributes;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using DB2FileReaderLib.NET.Attributes;
 
 namespace DB2FileReaderLib.NET
 {
@@ -14,7 +14,7 @@ namespace DB2FileReaderLib.NET
         {
             DB2Reader reader;
 
-            var stream = File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using (var stream = File.OpenRead(fileName))
             using (var bin = new BinaryReader(stream))
             {
                 var identifier = new string(bin.ReadChars(4));
@@ -25,13 +25,32 @@ namespace DB2FileReaderLib.NET
                         reader = new WDC3Reader(stream);
                         break;
                     case "WDC2":
+                    case "1SLC":
                         reader = new WDC2Reader(stream);
                         break;
                     case "WDC1":
                         reader = new WDC1Reader(stream);
                         break;
+                    case "WDB6":
+                        reader = new WDB6Reader(stream);
+                        break;
+                    case "WDB5":
+                        reader = new WDB5Reader(stream);
+                        break;
+                    case "WDB4":
+                        reader = new WDB4Reader(stream);
+                        break;
+                    case "WDB3":
+                        reader = new WDB3Reader(stream);
+                        break;
+                    case "WDB2":
+                        reader = new WDB2Reader(stream);
+                        break;
+                    case "WDBC":
+                        reader = new WDBCReader(stream);
+                        break;
                     default:
-                        throw new Exception("DBC type " + identifier + " is not supported!");
+                        throw new Exception("DB type " + identifier + " is not supported!");
                 }
             }
 
@@ -42,17 +61,18 @@ namespace DB2FileReaderLib.NET
             for (int i = 0; i < fields.Length; ++i)
             {
                 bool indexMapAttribute = reader.Flags.HasFlagExt(DB2Flags.Index) ? Attribute.IsDefined(fields[i], typeof(IndexAttribute)) : false;
+                int cardinality = (Attribute.GetCustomAttribute(fields[i], typeof(CardinalityAttribute)) as CardinalityAttribute)?.Count ?? 1;
 
-                fieldCache[i] = new FieldCache<T>(fields[i], fields[i].FieldType.IsArray, fields[i].GetSetter<T>(), indexMapAttribute);
+                fieldCache[i] = new FieldCache<T>(fields[i], fields[i].FieldType.IsArray, fields[i].GetSetter<T>(), indexMapAttribute, cardinality);
             }
 
-            Parallel.ForEach(reader.AsEnumerable(), row =>
+            Parallel.ForEach(reader.AsEnumerable(), new ParallelOptions() { MaxDegreeOfParallelism = 1 }, row =>
             {
                 T entry = new T();
 
                 row.Value.GetFields(fieldCache, entry);
 
-                TryAdd(row.Key, entry);
+                TryAdd(row.Value.Id, entry);
             });
         }
     }

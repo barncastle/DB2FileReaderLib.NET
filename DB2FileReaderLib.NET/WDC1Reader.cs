@@ -11,16 +11,16 @@ namespace DB2FileReaderLib.NET
     {
         private BitReader m_data;
         private DB2Reader m_reader;
-        private int m_dataOffset;
-        private int m_recordIndex;
+        private readonly int m_dataOffset;
+        private readonly int m_recordIndex;
 
         public int Id { get; set; }
         public BitReader Data { get => m_data; set => m_data = value; }
 
-        private FieldMetaData[] m_fieldMeta;
-        private ColumnMetaData[] m_columnMeta;
-        private Value32[][] m_palletData;
-        private Dictionary<int, Value32>[] m_commonData;
+        private readonly FieldMetaData[] m_fieldMeta;
+        private readonly ColumnMetaData[] m_columnMeta;
+        private readonly Value32[][] m_palletData;
+        private readonly Dictionary<int, Value32>[] m_commonData;
         private ReferenceEntry? m_refData;
 
         public WDC1Row(DB2Reader reader, BitReader data, int id, ReferenceEntry? refData, int recordIndex)

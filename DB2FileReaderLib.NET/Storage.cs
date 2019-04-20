@@ -61,13 +61,10 @@ namespace DB2FileReaderLib.NET
             FieldInfo[] fields = typeof(T).GetFields();
 
             FieldCache<T>[] fieldCache = new FieldCache<T>[fields.Length];
-
             for (int i = 0; i < fields.Length; ++i)
             {
                 bool indexMapAttribute = reader.Flags.HasFlagExt(DB2Flags.Index) ? Attribute.IsDefined(fields[i], typeof(IndexAttribute)) : false;
-                int cardinality = (Attribute.GetCustomAttribute(fields[i], typeof(CardinalityAttribute)) as CardinalityAttribute)?.Count ?? 1;
-
-                fieldCache[i] = new FieldCache<T>(fields[i], fields[i].FieldType.IsArray, fields[i].GetSetter<T>(), indexMapAttribute, cardinality);
+                fieldCache[i] = new FieldCache<T>(fields[i], indexMapAttribute);
             }
 
             var temp = new ConcurrentDictionary<int, T>(Environment.ProcessorCount, reader.RecordsCount);

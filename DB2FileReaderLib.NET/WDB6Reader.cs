@@ -38,7 +38,7 @@ namespace DB2FileReaderLib.NET
             else
             {
                 int idFieldIndex = reader.IdFieldIndex;
-                Id = GetFieldValue<int>(0, m_data, m_fieldMeta[idFieldIndex], m_commonData[idFieldIndex]);
+                Id = GetFieldValue<int>(0, m_data, m_fieldMeta[idFieldIndex], m_commonData?[idFieldIndex]);
             }
         }
 

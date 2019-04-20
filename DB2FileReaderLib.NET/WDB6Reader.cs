@@ -87,6 +87,12 @@ namespace DB2FileReaderLib.NET
                 object value = null;
                 int fieldIndex = i - indexFieldOffSet;
 
+                if (!m_reader.Flags.HasFlagExt(DB2Flags.Sparse))
+                {
+                    m_data.Position = m_fieldMeta[fieldIndex].Offset * 8;
+                    m_data.Offset = m_dataOffset;
+                }
+
                 if (info.IsArray)
                 {
                     if (info.Cardinality <= 1)

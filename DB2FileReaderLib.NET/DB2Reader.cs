@@ -285,11 +285,10 @@ namespace DB2FileReaderLib.NET
         public string ReadCString()
         {
             uint num;
-            List<byte> bytes = new List<byte>();
-            int byteSize = 8;
 
-            while ((num = ReadUInt32(byteSize)) != 0)
-                bytes.Add(Convert.ToByte(num));
+            List<byte> bytes = new List<byte>(0x40);
+            while ((num = ReadUInt32(8)) != 0)
+                bytes.Add((byte)num);
 
             return Encoding.UTF8.GetString(bytes.ToArray());
         }

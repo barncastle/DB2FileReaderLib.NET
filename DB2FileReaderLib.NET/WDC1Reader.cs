@@ -265,27 +265,17 @@ namespace DB2FileReaderLib.NET
                     if (reader.BaseStream.Position != sparseTableOffset)
                         throw new Exception("r.BaseStream.Position != sparseTableOffset");
 
-                    Dictionary<uint, int> offSetKeyMap = new Dictionary<uint, int>();
-                    List<SparseEntry> tempSparseEntries = new List<SparseEntry>();
+                    var tempSparseEntries = new Dictionary<uint, SparseEntry>();
                     for (int i = 0; i < (MaxIndex - MinIndex + 1); i++)
                     {
                         SparseEntry sparse = reader.Read<SparseEntry>();
-
                         if (sparse.Offset == 0 || sparse.Size == 0)
                             continue;
 
-                        // special case, may contain duplicates in the offset map that we don't want
-                        if (copyTableSize == 0)
-                        {
-                            if (offSetKeyMap.ContainsKey(sparse.Offset))
-                                continue;
-                        }
-
-                        tempSparseEntries.Add(sparse);
-                        offSetKeyMap.Add(sparse.Offset, 0);
+                        tempSparseEntries[sparse.Offset] = sparse;
                     }
 
-                    sparseEntries = tempSparseEntries.ToArray();
+                    sparseEntries = tempSparseEntries.Values.ToArray();
                 }
 
                 // index data

@@ -65,7 +65,7 @@ namespace DB2FileReaderLib.NET
                 fieldCache[i] = new FieldCache<T>(fields[i], indexMapAttribute);
             }
 
-            Parallel.ForEach(reader.AsEnumerable(), row =>
+            Parallel.ForEach(reader.AsEnumerable(), new ParallelOptions() { MaxDegreeOfParallelism = 1 }, row =>
             {
                 T entry = new T();
                 row.Value.GetFields(fieldCache, entry);

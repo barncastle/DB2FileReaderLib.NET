@@ -67,9 +67,9 @@ namespace DB2FileReaderLib.NET
             for (int i = 0; i < fields.Length; ++i)
             {
                 FieldCache<T> info = fields[i];
-                if (info.IndexMapField)
+                if (i == 0)
                 {
-                    info.Setter(entry, Convert.ChangeType(Id, info.Field.FieldType));
+                    info.Setter(entry, Id);
                     continue;
                 }
 

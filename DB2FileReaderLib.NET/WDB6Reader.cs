@@ -213,6 +213,9 @@ namespace DB2FileReaderLib.NET
                 int totalFieldCount = reader.ReadInt32();
                 int commonDataSize = reader.ReadInt32();
 
+                if (RecordsCount == 0)
+                    return;
+
                 // field meta data
                 m_meta = reader.ReadArray<FieldMetaData>(FieldsCount);
 

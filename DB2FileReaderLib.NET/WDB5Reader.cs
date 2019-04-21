@@ -165,7 +165,7 @@ namespace DB2FileReaderLib.NET
 
         public WDB5Reader(string dbcFile) : this(new FileStream(dbcFile, FileMode.Open)) { }
 
-        public WDB5Reader(Stream stream)
+        public WDB5Reader(Stream stream, int idIndexOverride = -1)
         {
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
@@ -189,6 +189,14 @@ namespace DB2FileReaderLib.NET
                 int copyTableSize = reader.ReadInt32();
                 Flags = (DB2Flags)reader.ReadUInt16();
                 IdFieldIndex = reader.ReadUInt16();
+
+                if (RecordsCount == 0)
+                    return;
+
+                // TODO ... this..
+                // prior to 21737 this was always 0 filled
+                if (IdFieldIndex == 0 && idIndexOverride > -1)
+                    IdFieldIndex = idIndexOverride;
 
                 // field meta data
                 m_meta = reader.ReadArray<FieldMetaData>(FieldsCount);

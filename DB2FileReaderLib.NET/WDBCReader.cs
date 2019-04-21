@@ -133,6 +133,9 @@ namespace DB2FileReaderLib.NET
                 RecordSize = reader.ReadInt32();
                 StringTableSize = reader.ReadInt32();
 
+                if (RecordsCount == 0)
+                    return;
+
                 recordsData = reader.ReadBytes(RecordsCount * RecordSize);
                 Array.Resize(ref recordsData, recordsData.Length + 8); // pad with extra zeros so we don't crash when reading
 

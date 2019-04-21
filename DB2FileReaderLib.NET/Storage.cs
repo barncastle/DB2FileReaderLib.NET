@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,11 +10,13 @@ namespace DB2FileReaderLib.NET
 {
     public class Storage<T> : SortedDictionary<int, T> where T : class, new()
     {
-        public Storage(string fileName)
+        public Storage(string fileName) : this(File.OpenRead(fileName)) { }
+
+        public Storage(Stream stream)
         {
             DB2Reader reader;
 
-            using (var stream = File.OpenRead(fileName))
+            using (stream)
             using (var bin = new BinaryReader(stream))
             {
                 var identifier = new string(bin.ReadChars(4));
@@ -73,7 +73,7 @@ namespace DB2FileReaderLib.NET
                     Add(row.Value.Id, entry);
             });
 
-            
+
         }
 
     }

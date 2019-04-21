@@ -146,6 +146,9 @@ namespace DB2FileReaderLib.NET
                 int copyTableSize = reader.ReadInt32();
                 Flags = (DB2Flags)reader.ReadUInt32();
 
+                if (RecordsCount == 0)
+                    return;
+
                 if (!Flags.HasFlagExt(DB2Flags.Sparse))
                 {
                     // records data

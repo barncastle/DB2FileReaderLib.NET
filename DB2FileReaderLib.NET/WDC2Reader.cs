@@ -39,13 +39,13 @@ namespace DB2FileReaderLib.NET
             m_refData = refData;
 
             if (id != -1)
+            {
                 Id = id;
+            }                
             else
             {
                 int idFieldIndex = reader.IdFieldIndex;
-
                 m_data.Position = m_columnMeta[idFieldIndex].RecordOffset;
-
                 Id = GetFieldValue<int>(0, m_data, m_fieldMeta[idFieldIndex], m_columnMeta[idFieldIndex], m_palletData[idFieldIndex], m_commonData[idFieldIndex]);
             }
         }
@@ -263,7 +263,7 @@ namespace DB2FileReaderLib.NET
                 if (sectionsCount > 1)
                     throw new Exception("WDC2 only supports 1 section");
 
-                if (sectionsCount == 0)
+                if (sectionsCount == 0 || RecordsCount == 0)
                     return;
 
                 SectionHeader[] sections = reader.ReadArray<SectionHeader>(sectionsCount);

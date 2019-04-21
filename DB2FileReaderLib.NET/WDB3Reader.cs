@@ -156,6 +156,9 @@ namespace DB2FileReaderLib.NET
                 int locale = reader.ReadInt32();
                 int copyTableSize = reader.ReadInt32();
 
+                if (RecordsCount == 0)
+                    return;
+
                 if (FlagTable.TryGetValue(TableHash, out var flags))
                     Flags |= flags;
 

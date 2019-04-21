@@ -38,13 +38,13 @@ namespace DB2FileReaderLib.NET
             m_refData = refData;
 
             if (id != -1)
+            {
                 Id = id;
+            }
             else
             {
                 int idFieldIndex = reader.IdFieldIndex;
-
                 m_data.Position = m_columnMeta[idFieldIndex].RecordOffset;
-
                 Id = GetFieldValue<int>(0, m_data, m_fieldMeta[idFieldIndex], m_columnMeta[idFieldIndex], m_palletData[idFieldIndex], m_commonData[idFieldIndex]);
             }
         }
@@ -234,6 +234,9 @@ namespace DB2FileReaderLib.NET
                 int commonDataSize = reader.ReadInt32();
                 int palletDataSize = reader.ReadInt32(); // in bytes, sizeof(DBC2PalletValue) == 4
                 int referenceDataSize = reader.ReadInt32(); // uint NumRecords, uint minId, uint maxId, {uint id, uint index}[NumRecords], questionable usefulness...
+
+                if (RecordsCount == 0)
+                    return;
 
                 // field meta data
                 m_meta = reader.ReadArray<FieldMetaData>(FieldsCount);

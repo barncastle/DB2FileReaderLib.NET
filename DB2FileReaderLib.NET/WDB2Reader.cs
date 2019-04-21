@@ -137,6 +137,9 @@ namespace DB2FileReaderLib.NET
                 uint build = reader.ReadUInt32();
                 uint timestamp = reader.ReadUInt32();
 
+                if (RecordsCount == 0)
+                    return;
+
                 // Extended header 
                 if (build > 12880)
                 {

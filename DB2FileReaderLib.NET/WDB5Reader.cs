@@ -12,6 +12,7 @@ namespace DB2FileReaderLib.NET
         private DB2Reader m_reader;
         private readonly int m_dataOffset;
         private readonly int m_recordIndex;
+        private readonly bool m_hasId;
 
         public int Id { get; set; }
         public BitReader Data { get => m_data; set => m_data = value; }
@@ -31,12 +32,18 @@ namespace DB2FileReaderLib.NET
             if (id > -1)
             {
                 Id = id;
+                m_hasId = true;
             }
-            else
+            else if(m_reader.IdFieldIndex > 0)
             {
                 int idFieldIndex = reader.IdFieldIndex;
                 m_data.Position = m_fieldMeta[idFieldIndex].Offset * 8;
                 Id = GetFieldValue<int>(m_data, m_fieldMeta[idFieldIndex]);
+                m_hasId = true;
+            }
+            else
+            {
+                Id = recordIndex + 1;
             }
         }
 
@@ -77,7 +84,17 @@ namespace DB2FileReaderLib.NET
                 FieldCache<T> info = fields[i];
                 if (info.IndexMapField)
                 {
-                    indexFieldOffSet++;
+                    if(m_hasId)
+                    {
+                        indexFieldOffSet++;
+                    }
+                    else
+                    {
+                        m_data.Offset = m_dataOffset;
+                        m_data.Position = m_fieldMeta[i].Offset * 8;
+                        Id = GetFieldValue<int>(m_data, m_fieldMeta[i]);
+                    }
+                    
                     info.Setter(entry, Convert.ChangeType(Id, info.Field.FieldType));
                     continue;
                 }
@@ -165,7 +182,7 @@ namespace DB2FileReaderLib.NET
 
         public WDB5Reader(string dbcFile) : this(new FileStream(dbcFile, FileMode.Open)) { }
 
-        public WDB5Reader(Stream stream, int idIndexOverride = -1)
+        public WDB5Reader(Stream stream)
         {
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
@@ -192,11 +209,6 @@ namespace DB2FileReaderLib.NET
 
                 if (RecordsCount == 0)
                     return;
-
-                // TODO ... this..
-                // prior to 21737 this was always 0 filled
-                if (IdFieldIndex == 0 && idIndexOverride > -1)
-                    IdFieldIndex = idIndexOverride;
 
                 // field meta data
                 m_meta = reader.ReadArray<FieldMetaData>(FieldsCount);
@@ -279,6 +291,10 @@ namespace DB2FileReaderLib.NET
                     rec.Id = copyRow.Key;
                     _Records.Add(copyRow.Key, rec);
                 }
+
+                // HACK prior to 21737 this was always 0 filled
+                if (IdFieldIndex == 0)
+                    Flags |= DB2Flags.Index;
             }
         }
     }

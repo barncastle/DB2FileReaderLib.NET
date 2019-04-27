@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -16,6 +17,40 @@ namespace DB2FileReaderLib.NET
 
     public abstract class DB2Reader : IEnumerable<KeyValuePair<int, IDB2Row>>
     {
+        public static DB2Reader FromStream(Stream stream)
+        {
+            using (stream)
+            using (var bin = new BinaryReader(stream))
+            {
+                var identifier = new string(bin.ReadChars(4));
+                stream.Position = 0;
+                switch (identifier)
+                {
+                    case "WDC3":
+                        return new WDC3Reader(stream);
+                    case "WDC2":
+                    case "1SLC":
+                        return new WDC2Reader(stream);
+                    case "WDC1":
+                        return new WDC1Reader(stream);
+                    case "WDB6":
+                        return new WDB6Reader(stream);
+                    case "WDB5":
+                        return new WDB5Reader(stream);
+                    case "WDB4":
+                        return new WDB4Reader(stream);
+                    case "WDB3":
+                        return new WDB3Reader(stream);
+                    case "WDB2":
+                        return new WDB2Reader(stream);
+                    case "WDBC":
+                        return new WDBCReader(stream);
+                    default:
+                        throw new ArgumentOutOfRangeException("DB type " + identifier + " is not supported!");
+                }
+            }
+        }
+
         public int RecordsCount { get; protected set; }
         public int FieldsCount { get; protected set; }
         public int RecordSize { get; protected set; }

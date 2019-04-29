@@ -4,14 +4,16 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using DB2FileReaderLib.NET.Common;
 
-namespace DB2FileReaderLib.NET
+namespace DB2FileReaderLib.NET.Readers
 {
-    public class WDC1Row : IDB2Row
+    class WDC1Row : IDBRow
     {
         private BitReader m_data;
-        private DB2Reader m_reader;
+        private BaseReader m_reader;
         private readonly int m_dataOffset;
+        private readonly int m_dataPosition;
         private readonly int m_recordIndex;
 
         public int Id { get; set; }
@@ -23,13 +25,14 @@ namespace DB2FileReaderLib.NET
         private readonly Dictionary<int, Value32>[] m_commonData;
         private ReferenceEntry? m_refData;
 
-        public WDC1Row(DB2Reader reader, BitReader data, int id, ReferenceEntry? refData, int recordIndex)
+        public WDC1Row(BaseReader reader, BitReader data, int id, ReferenceEntry? refData, int recordIndex)
         {
             m_reader = reader;
             m_data = data;
             m_recordIndex = recordIndex;
 
             m_dataOffset = m_data.Offset;
+            m_dataPosition = m_data.Position;
 
             m_fieldMeta = reader.Meta;
             m_columnMeta = reader.ColumnMeta;
@@ -37,19 +40,10 @@ namespace DB2FileReaderLib.NET
             m_commonData = reader.CommonData;
             m_refData = refData;
 
-            if (id != -1)
-            {
-                Id = id;
-            }
-            else
-            {
-                int idFieldIndex = reader.IdFieldIndex;
-                m_data.Position = m_columnMeta[idFieldIndex].RecordOffset;
-                Id = GetFieldValue<int>(0, m_data, m_fieldMeta[idFieldIndex], m_columnMeta[idFieldIndex], m_palletData[idFieldIndex], m_commonData[idFieldIndex]);
-            }
+            Id = id;
         }
 
-        private static Dictionary<Type, Func<int, BitReader, FieldMetaData, ColumnMetaData, Value32[], Dictionary<int, Value32>, Dictionary<long, string>, DB2Reader, object>> simpleReaders = new Dictionary<Type, Func<int, BitReader, FieldMetaData, ColumnMetaData, Value32[], Dictionary<int, Value32>, Dictionary<long, string>, DB2Reader, object>>
+        private static Dictionary<Type, Func<int, BitReader, FieldMetaData, ColumnMetaData, Value32[], Dictionary<int, Value32>, Dictionary<long, string>, BaseReader, object>> simpleReaders = new Dictionary<Type, Func<int, BitReader, FieldMetaData, ColumnMetaData, Value32[], Dictionary<int, Value32>, Dictionary<long, string>, BaseReader, object>>
         {
             [typeof(long)] = (id, data, fieldMeta, columnMeta, palletData, commonData, stringTable, header) => GetFieldValue<long>(id, data, fieldMeta, columnMeta, palletData, commonData),
             [typeof(float)] = (id, data, fieldMeta, columnMeta, palletData, commonData, stringTable, header) => GetFieldValue<float>(id, data, fieldMeta, columnMeta, palletData, commonData),
@@ -81,12 +75,19 @@ namespace DB2FileReaderLib.NET
         {
             int indexFieldOffSet = 0;
 
-            for (int i = 0; i < fields.Length; ++i)
+            m_data.Position = m_dataPosition;
+            m_data.Offset = m_dataOffset;
+
+            for (int i = 0; i < fields.Length; i++)
             {
                 FieldCache<T> info = fields[i];
-                if (info.IndexMapField)
+                if (i == m_reader.IdFieldIndex)
                 {
-                    indexFieldOffSet++;
+                    if (Id != -1)
+                        indexFieldOffSet++;
+                    else
+                        Id = GetFieldValue<int>(0, m_data, m_fieldMeta[i], m_columnMeta[i], m_palletData[i], m_commonData[i]);
+
                     info.Setter(entry, Convert.ChangeType(Id, info.Field.FieldType));
                     continue;
                 }
@@ -99,12 +100,6 @@ namespace DB2FileReaderLib.NET
                     value = m_refData?.Id ?? 0;
                     info.Setter(entry, Convert.ChangeType(value, info.Field.FieldType));
                     continue;
-                }
-
-                if (!m_reader.Flags.HasFlagExt(DB2Flags.Sparse))
-                {
-                    m_data.Position = m_columnMeta[fieldIndex].RecordOffset;
-                    m_data.Offset = m_dataOffset;
                 }
 
                 if (info.IsArray)
@@ -131,68 +126,75 @@ namespace DB2FileReaderLib.NET
             switch (columnMeta.CompressionType)
             {
                 case CompressionType.None:
-                    int bitSize = 32 - fieldMeta.Bits;
-                    if (bitSize > 0)
+                    {
+                        int bitSize = 32 - fieldMeta.Bits;
+                        if (bitSize <= 0)
+                            bitSize = columnMeta.Immediate.BitWidth;
+
                         return r.ReadValue64(bitSize).GetValue<T>();
-                    else
-                        return r.ReadValue64(columnMeta.Immediate.BitWidth).GetValue<T>();
+                    }
                 case CompressionType.Immediate:
-                    return r.ReadValue64(columnMeta.Immediate.BitWidth).GetValue<T>();
+                    {
+                        return r.ReadValue64(columnMeta.Immediate.BitWidth).GetValue<T>();
+                    }
                 case CompressionType.Common:
-                    if (commonData.TryGetValue(Id, out Value32 val))
-                        return val.GetValue<T>();
-                    else
+                    {
+                        if (commonData.TryGetValue(Id, out Value32 val))
+                            return val.GetValue<T>();
                         return columnMeta.Common.DefaultValue.GetValue<T>();
+                    }
                 case CompressionType.Pallet:
-                    uint palletIndex = r.ReadUInt32(columnMeta.Pallet.BitWidth);
-
-                    T val1 = palletData[palletIndex].GetValue<T>();
-
-                    return val1;
+                    {
+                        uint palletIndex = r.ReadUInt32(columnMeta.Pallet.BitWidth);
+                        return palletData[palletIndex].GetValue<T>();
+                    }
             }
+
             throw new Exception(string.Format("Unexpected compression type {0}", columnMeta.CompressionType));
         }
 
         private static T[] GetFieldValueArray<T>(BitReader r, FieldMetaData fieldMeta, ColumnMetaData columnMeta, Value32[] palletData, Dictionary<int, Value32> commonData) where T : struct
         {
+            T[] array;
             switch (columnMeta.CompressionType)
             {
                 case CompressionType.None:
-                    int bitSize = 32 - fieldMeta.Bits;
-
-                    T[] arr1 = new T[columnMeta.Size / (FastStruct<T>.Size * 8)];
-
-                    for (int i = 0; i < arr1.Length; i++)
                     {
-                        if (bitSize > 0)
-                            arr1[i] = r.ReadValue64(bitSize).GetValue<T>();
-                        else
-                            arr1[i] = r.ReadValue64(columnMeta.Immediate.BitWidth).GetValue<T>();
+                        int bitSize = 32 - fieldMeta.Bits;
+                        if (bitSize <= 0)
+                            bitSize = columnMeta.Immediate.BitWidth;
+
+                        array = new T[columnMeta.Size / (FastStruct<T>.Size * 8)];
+
+                        for (int i = 0; i < array.Length; i++)
+                            array[i] = r.ReadValue64(bitSize).GetValue<T>();
+
+                        return array;
                     }
-
-                    return arr1;
                 case CompressionType.PalletArray:
-                    int cardinality = columnMeta.Pallet.Cardinality;
+                    {
+                        int cardinality = columnMeta.Pallet.Cardinality;
+                        uint palletArrayIndex = r.ReadUInt32(columnMeta.Pallet.BitWidth);
 
-                    uint palletArrayIndex = r.ReadUInt32(columnMeta.Pallet.BitWidth);
+                        array = new T[cardinality];
+                        for (int i = 0; i < array.Length; i++)
+                            array[i] = palletData[i + cardinality * (int)palletArrayIndex].GetValue<T>();
 
-                    T[] arr3 = new T[cardinality];
+                        return array;
 
-                    for (int i = 0; i < arr3.Length; i++)
-                        arr3[i] = palletData[i + cardinality * (int)palletArrayIndex].GetValue<T>();
-
-                    return arr3;
+                    }
             }
+
             throw new Exception(string.Format("Unexpected compression type {0}", columnMeta.CompressionType));
         }
 
-        public IDB2Row Clone()
+        public IDBRow Clone()
         {
-            return (IDB2Row)MemberwiseClone();
+            return (IDBRow)MemberwiseClone();
         }
     }
 
-    public class WDC1Reader : DB2Reader
+    class WDC1Reader : BaseReader
     {
         private const int HeaderSize = 84;
         private const uint WDC1FmtSig = 0x31434457; // WDC1
@@ -249,14 +251,11 @@ namespace DB2FileReaderLib.NET
                     Array.Resize(ref recordsData, recordsData.Length + 8); // pad with extra zeros so we don't crash when reading
 
                     // string data
-                    m_stringsTable = new Dictionary<long, string>();
-
+                    m_stringsTable = new Dictionary<long, string>(StringTableSize / 0x20);
                     for (int i = 0; i < StringTableSize;)
                     {
                         long oldPos = reader.BaseStream.Position;
-
                         m_stringsTable[i] = reader.ReadCString();
-
                         i += (int)(reader.BaseStream.Position - oldPos);
                     }
                 }
@@ -268,8 +267,9 @@ namespace DB2FileReaderLib.NET
                     if (reader.BaseStream.Position != sparseTableOffset)
                         throw new Exception("r.BaseStream.Position != sparseTableOffset");
 
-                    var tempSparseEntries = new Dictionary<uint, SparseEntry>();
-                    for (int i = 0; i < (MaxIndex - MinIndex + 1); i++)
+                    int sparseCount = MaxIndex - MinIndex + 1;
+                    var tempSparseEntries = new Dictionary<uint, SparseEntry>(sparseCount);
+                    for (int i = 0; i < sparseCount; i++)
                     {
                         SparseEntry sparse = reader.Read<SparseEntry>();
                         if (sparse.Offset == 0 || sparse.Size == 0)
@@ -278,24 +278,22 @@ namespace DB2FileReaderLib.NET
                         tempSparseEntries[sparse.Offset] = sparse;
                     }
 
-                    sparseEntries = tempSparseEntries.Values.ToArray();
+                    SparseEntries = tempSparseEntries.Values.ToArray();
                 }
 
                 // index data
                 m_indexData = reader.ReadArray<int>(indexDataSize / 4);
 
                 // duplicate rows data
-                Dictionary<int, int> copyData = new Dictionary<int, int>();
-
+                m_copyData = new Dictionary<int, int>(copyTableSize / 8);
                 for (int i = 0; i < copyTableSize / 8; i++)
-                    copyData[reader.ReadInt32()] = reader.ReadInt32();
+                    m_copyData[reader.ReadInt32()] = reader.ReadInt32();
 
                 // column meta data
                 m_columnMeta = reader.ReadArray<ColumnMetaData>(FieldsCount);
 
                 // pallet data
                 m_palletData = new Value32[m_columnMeta.Length][];
-
                 for (int i = 0; i < m_columnMeta.Length; i++)
                 {
                     if (m_columnMeta[i].CompressionType == CompressionType.Pallet || m_columnMeta[i].CompressionType == CompressionType.PalletArray)
@@ -306,12 +304,11 @@ namespace DB2FileReaderLib.NET
 
                 // common data
                 m_commonData = new Dictionary<int, Value32>[m_columnMeta.Length];
-
                 for (int i = 0; i < m_columnMeta.Length; i++)
                 {
                     if (m_columnMeta[i].CompressionType == CompressionType.Common)
                     {
-                        Dictionary<int, Value32> commonValues = new Dictionary<int, Value32>();
+                        var commonValues = new Dictionary<int, Value32>((int)m_columnMeta[i].AdditionalDataSize / 8);
                         m_commonData[i] = commonValues;
 
                         for (int j = 0; j < m_columnMeta[i].AdditionalDataSize / 8; j++)
@@ -321,7 +318,6 @@ namespace DB2FileReaderLib.NET
 
                 // reference data
                 ReferenceData refData = null;
-
                 if (referenceDataSize > 0)
                 {
                     refData = new ReferenceData
@@ -335,37 +331,21 @@ namespace DB2FileReaderLib.NET
                 }
 
                 int position = 0;
-
-                for (int i = 0; i < RecordsCount; ++i)
+                _Records.EnsureCapacity(RecordsCount);
+                for (int i = 0; i < RecordsCount; i++)
                 {
                     BitReader bitReader = new BitReader(recordsData) { Position = 0 };
 
                     if (Flags.HasFlagExt(DB2Flags.Sparse))
                     {
                         bitReader.Position = position;
-                        position += sparseEntries[i].Size * 8;
+                        position += SparseEntries[i].Size * 8;
                     }
                     else
                         bitReader.Offset = i * RecordSize;
 
-                    IDB2Row rec = new WDC1Row(this, bitReader, indexDataSize != 0 ? m_indexData[i] : -1, refData?.Entries.ElementAtOrDefault(i), i);
-
-                    if (indexDataSize != 0)
-                        _Records.Add(m_indexData[i], rec);
-                    else
-                        _Records.Add(rec.Id, rec);
-                }
-
-                foreach (var copyRow in copyData)
-                {
-                    IDB2Row rec = _Records[copyRow.Value].Clone();
-                    rec.Data = new BitReader(recordsData);
-
-                    rec.Data.Position = Flags.HasFlagExt(DB2Flags.Sparse) ? _Records[copyRow.Value].Data.Position : 0;
-                    rec.Data.Offset = Flags.HasFlagExt(DB2Flags.Sparse) ? 0 : _Records[copyRow.Value].Data.Offset;
-
-                    rec.Id = copyRow.Key;
-                    _Records.Add(copyRow.Key, rec);
+                    IDBRow rec = new WDC1Row(this, bitReader, indexDataSize != 0 ? m_indexData[i] : -1, refData?.Entries.ElementAtOrDefault(i), i);
+                    _Records.Add(i, rec);
                 }
             }
         }

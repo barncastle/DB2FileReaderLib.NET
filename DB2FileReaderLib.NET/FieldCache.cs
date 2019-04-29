@@ -4,7 +4,7 @@ using DB2FileReaderLib.NET.Attributes;
 
 namespace DB2FileReaderLib.NET
 {
-    public class FieldCache<T>
+    class FieldCache<T>
     {
         public readonly FieldInfo Field;
         public readonly bool IsArray = false;
@@ -13,12 +13,12 @@ namespace DB2FileReaderLib.NET
 
         public int Cardinality { get; set; } = 1;
 
-        public FieldCache(FieldInfo field, bool indexMapField)
+        public FieldCache(FieldInfo field)
         {
             Field = field;
             IsArray = field.FieldType.IsArray;
             Setter = field.GetSetter<T>();
-            IndexMapField = indexMapField;
+            IndexMapField = Attribute.IsDefined(field, typeof(IndexAttribute));
             Cardinality = GetCardinality(field);
         }
 

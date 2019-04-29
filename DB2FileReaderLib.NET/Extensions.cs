@@ -7,9 +7,9 @@ using System.Text;
 
 namespace DB2FileReaderLib.NET
 {
-    public static class Extensions
+    static class Extensions
     {
-        internal static Action<T, object> GetSetter<T>(this FieldInfo fieldInfo)
+        public static Action<T, object> GetSetter<T>(this FieldInfo fieldInfo)
         {
             var paramExpression = Expression.Parameter(typeof(T));
             var propertyExpression = Expression.Field(paramExpression, fieldInfo);
@@ -52,7 +52,7 @@ namespace DB2FileReaderLib.NET
         }
     }
 
-    public static class CStringExtensions
+    static class CStringExtensions
     {
         /// <summary> Reads the NULL terminated string from
         /// the current stream and advances the current position of the stream by string length + 1.
@@ -69,7 +69,7 @@ namespace DB2FileReaderLib.NET
         /// </summary>
         public static string ReadCString(this BinaryReader reader, Encoding encoding)
         {
-            var bytes = new System.Collections.Generic.List<byte>();
+            var bytes = new System.Collections.Generic.List<byte>(0x20);
             byte b;
             while ((b = reader.ReadByte()) != 0)
                 bytes.Add(b);
@@ -88,7 +88,7 @@ namespace DB2FileReaderLib.NET
             str = str.Replace(" ", string.Empty);
 
             var res = new byte[str.Length / 2];
-            for (int i = 0; i < res.Length; ++i)
+            for (int i = 0; i < res.Length; i++)
             {
                 res[i] = Convert.ToByte(str.Substring(i * 2, 2), 16);
             }

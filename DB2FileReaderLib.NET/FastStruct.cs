@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-public static class FastStruct<T> where T : struct
+static class FastStruct<T> where T : struct
 {
     private delegate T LoadFromByteRefDelegate(ref byte source);
     private delegate void CopyMemoryDelegate(ref T dest, ref byte src, int count);

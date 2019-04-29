@@ -3,51 +3,37 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using DB2FileReaderLib.NET.Common;
 
-namespace DB2FileReaderLib.NET
+namespace DB2FileReaderLib.NET.Readers
 {
-    public class WDB5Row : IDB2Row
+    class WDB5Row : IDBRow
     {
         private BitReader m_data;
-        private DB2Reader m_reader;
+        private BaseReader m_reader;
         private readonly int m_dataOffset;
+        private readonly int m_dataPosition;
         private readonly int m_recordIndex;
-        private readonly bool m_hasId;
 
         public int Id { get; set; }
         public BitReader Data { get => m_data; set => m_data = value; }
 
         private readonly FieldMetaData[] m_fieldMeta;
 
-        public WDB5Row(DB2Reader reader, BitReader data, int id, int recordIndex)
+        public WDB5Row(BaseReader reader, BitReader data, int id, int recordIndex)
         {
             m_reader = reader;
             m_data = data;
             m_recordIndex = recordIndex;
 
+            Id = id;
+
             m_dataOffset = m_data.Offset;
-
+            m_dataPosition = m_data.Position;
             m_fieldMeta = reader.Meta;
-
-            if (id > -1)
-            {
-                Id = id;
-                m_hasId = true;
-            }
-            else if(m_reader.IdFieldIndex > 0)
-            {
-                int idFieldIndex = reader.IdFieldIndex;
-                m_data.Position = m_fieldMeta[idFieldIndex].Offset * 8;
-                Id = GetFieldValue<int>(m_data, m_fieldMeta[idFieldIndex]);
-                m_hasId = true;
-            }
-            else
-            {
-                Id = recordIndex + 1;
-            }
         }
 
-        private static Dictionary<Type, Func<BitReader, FieldMetaData, Dictionary<long, string>, DB2Reader, object>> simpleReaders = new Dictionary<Type, Func<BitReader, FieldMetaData, Dictionary<long, string>, DB2Reader, object>>
+        private static Dictionary<Type, Func<BitReader, FieldMetaData, Dictionary<long, string>, BaseReader, object>> simpleReaders = new Dictionary<Type, Func<BitReader, FieldMetaData, Dictionary<long, string>, BaseReader, object>>
         {
             [typeof(long)] = (data, fieldMeta, stringTable, header) => GetFieldValue<long>(data, fieldMeta),
             [typeof(float)] = (data, fieldMeta, stringTable, header) => GetFieldValue<float>(data, fieldMeta),
@@ -79,34 +65,25 @@ namespace DB2FileReaderLib.NET
         {
             int indexFieldOffSet = 0;
 
-            for (int i = 0; i < fields.Length; ++i)
+            m_data.Position = m_dataPosition;
+            m_data.Offset = m_dataOffset;
+
+            for (int i = 0; i < fields.Length; i++)
             {
                 FieldCache<T> info = fields[i];
                 if (info.IndexMapField)
                 {
-                    if(m_hasId)
-                    {
+                    if (Id != -1)
                         indexFieldOffSet++;
-                    }
                     else
-                    {
-                        m_data.Offset = m_dataOffset;
-                        m_data.Position = m_fieldMeta[i].Offset * 8;
                         Id = GetFieldValue<int>(m_data, m_fieldMeta[i]);
-                    }
-                    
+
                     info.Setter(entry, Convert.ChangeType(Id, info.Field.FieldType));
                     continue;
                 }
 
                 object value = null;
                 int fieldIndex = i - indexFieldOffSet;
-
-                if (!m_reader.Flags.HasFlagExt(DB2Flags.Sparse))
-                {
-                    m_data.Position = m_fieldMeta[fieldIndex].Offset * 8;
-                    m_data.Offset = m_dataOffset;
-                }
 
                 if (info.IsArray)
                 {
@@ -131,8 +108,7 @@ namespace DB2FileReaderLib.NET
         }
 
         /// <summary>
-        /// Cardinality can be calculated from the file itself, there are three criteria to account for
-        /// - Sparse Table : ((sparse size + offset) of the record - current offset) / sizeof(ValueType)
+        /// Cardinality can be calculated from the file itself
         /// - Last field of the record : (header.RecordSize - current offset) / sizeof(ValueType)
         /// - Middle field : (next field offset - current offset) / sizeof(ValueType)
         /// </summary>
@@ -145,9 +121,7 @@ namespace DB2FileReaderLib.NET
             int fieldValueSize = (32 - m_fieldMeta[fieldIndex].Bits) >> 3;
 
             int nextOffset;
-            if (m_reader.Flags.HasFlagExt(DB2Flags.Sparse))
-                nextOffset = m_reader.sparseEntries[fieldIndex].Size + fieldOffset; // get sparse size
-            else if (fieldIndex + 1 >= m_fieldMeta.Length)
+            if (fieldIndex + 1 >= m_fieldMeta.Length)
                 nextOffset = m_reader.RecordSize; // get total record size
             else
                 nextOffset = m_fieldMeta[fieldIndex + 1].Offset; // get next field offset
@@ -162,20 +136,20 @@ namespace DB2FileReaderLib.NET
 
         private static T[] GetFieldValueArray<T>(BitReader r, FieldMetaData fieldMeta, int cardinality) where T : struct
         {
-            T[] arr1 = new T[cardinality];
-            for (int i = 0; i < arr1.Length; i++)
-                arr1[i] = r.ReadValue64(32 - fieldMeta.Bits).GetValue<T>();
+            T[] array = new T[cardinality];
+            for (int i = 0; i < array.Length; i++)
+                array[i] = r.ReadValue64(32 - fieldMeta.Bits).GetValue<T>();
 
-            return arr1;
+            return array;
         }
 
-        public IDB2Row Clone()
+        public IDBRow Clone()
         {
-            return (IDB2Row)MemberwiseClone();
+            return (IDBRow)MemberwiseClone();
         }
     }
 
-    public class WDB5Reader : DB2Reader
+    class WDB5Reader : BaseReader
     {
         private const int HeaderSize = 52;
         private const uint WDB5FmtSig = 0x35424457; // WDB5
@@ -220,13 +194,11 @@ namespace DB2FileReaderLib.NET
                     Array.Resize(ref recordsData, recordsData.Length + 8); // pad with extra zeros so we don't crash when reading
 
                     // string table
-                    m_stringsTable = new Dictionary<long, string>();
+                    m_stringsTable = new Dictionary<long, string>(StringTableSize / 0x20);
                     for (int i = 0; i < StringTableSize;)
                     {
                         long oldPos = reader.BaseStream.Position;
-
                         m_stringsTable[i] = reader.ReadCString();
-
                         i += (int)(reader.BaseStream.Position - oldPos);
                     }
                 }
@@ -235,8 +207,9 @@ namespace DB2FileReaderLib.NET
                     // sparse data with inlined strings
                     recordsData = reader.ReadBytes(StringTableSize - (int)reader.BaseStream.Position);
 
-                    var tempSparseEntries = new Dictionary<uint, SparseEntry>();
-                    for (int i = 0; i < (MaxIndex - MinIndex + 1); i++)
+                    int sparseCount = MaxIndex - MinIndex + 1;
+                    var tempSparseEntries = new Dictionary<uint, SparseEntry>(sparseCount);
+                    for (int i = 0; i < sparseCount; i++)
                     {
                         SparseEntry sparse = reader.Read<SparseEntry>();
                         if (sparse.Offset == 0 || sparse.Size == 0)
@@ -245,7 +218,7 @@ namespace DB2FileReaderLib.NET
                         tempSparseEntries[sparse.Offset] = sparse;
                     }
 
-                    sparseEntries = tempSparseEntries.Values.ToArray();
+                    SparseEntries = tempSparseEntries.Values.ToArray();
                 }
 
                 // secondary key
@@ -257,44 +230,29 @@ namespace DB2FileReaderLib.NET
                     m_indexData = reader.ReadArray<int>(RecordsCount);
 
                 // duplicate rows data
-                Dictionary<int, int> copyData = new Dictionary<int, int>();
+                m_copyData = new Dictionary<int, int>(copyTableSize / 8);
                 for (int i = 0; i < copyTableSize / 8; i++)
-                    copyData[reader.ReadInt32()] = reader.ReadInt32();
+                    m_copyData[reader.ReadInt32()] = reader.ReadInt32();
 
                 int position = 0;
-                for (int i = 0; i < RecordsCount; ++i)
+                _Records.EnsureCapacity(RecordsCount);
+                for (int i = 0; i < RecordsCount; i++)
                 {
                     BitReader bitReader = new BitReader(recordsData) { Position = 0 };
 
                     if (Flags.HasFlagExt(DB2Flags.Sparse))
                     {
                         bitReader.Position = position;
-                        position += sparseEntries[i].Size * 8;
+                        position += SparseEntries[i].Size * 8;
                     }
                     else
                     {
                         bitReader.Offset = i * RecordSize;
                     }
 
-                    IDB2Row rec = new WDB5Row(this, bitReader, Flags.HasFlagExt(DB2Flags.Index) ? m_indexData[i] : -1, i);
-                    _Records.Add(rec.Id, rec);
+                    IDBRow rec = new WDB5Row(this, bitReader, Flags.HasFlagExt(DB2Flags.Index) ? m_indexData[i] : -1, i);
+                    _Records.Add(i, rec);
                 }
-
-                foreach (var copyRow in copyData)
-                {
-                    IDB2Row rec = _Records[copyRow.Value].Clone();
-                    rec.Data = new BitReader(recordsData);
-
-                    rec.Data.Position = Flags.HasFlagExt(DB2Flags.Sparse) ? _Records[copyRow.Value].Data.Position : 0;
-                    rec.Data.Offset = Flags.HasFlagExt(DB2Flags.Sparse) ? 0 : _Records[copyRow.Value].Data.Offset;
-
-                    rec.Id = copyRow.Key;
-                    _Records.Add(copyRow.Key, rec);
-                }
-
-                // HACK prior to 21737 this was always 0 filled
-                if (IdFieldIndex == 0)
-                    Flags |= DB2Flags.Index;
             }
         }
     }

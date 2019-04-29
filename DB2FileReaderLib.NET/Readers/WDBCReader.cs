@@ -3,28 +3,29 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using DB2FileReaderLib.NET.Common;
 
-namespace DB2FileReaderLib.NET
+namespace DB2FileReaderLib.NET.Readers
 {
-    public class WDB2Row : IDB2Row
+    class WDBCRow : IDBRow
     {
         private BitReader m_data;
-        private DB2Reader m_reader;
+        private BaseReader m_reader;
         private readonly int m_recordIndex;
 
         public int Id { get; set; }
         public BitReader Data { get => m_data; set => m_data = value; }
 
-        public WDB2Row(DB2Reader reader, BitReader data, int recordIndex)
+        public WDBCRow(BaseReader reader, BitReader data, int recordIndex)
         {
             m_reader = reader;
             m_data = data;
-            m_recordIndex = recordIndex;
+            m_recordIndex = recordIndex + 1;
 
-            Id = recordIndex + 1; // this gets overriden on GetFields<>
+            Id = m_recordIndex = recordIndex + 1;
         }
 
-        private static Dictionary<Type, Func<BitReader, Dictionary<long, string>, DB2Reader, object>> simpleReaders = new Dictionary<Type, Func<BitReader, Dictionary<long, string>, DB2Reader, object>>
+        private static Dictionary<Type, Func<BitReader, Dictionary<long, string>, BaseReader, object>> simpleReaders = new Dictionary<Type, Func<BitReader, Dictionary<long, string>, BaseReader, object>>
         {
             [typeof(long)] = (data, stringTable, header) => GetFieldValue<long>(data),
             [typeof(float)] = (data, stringTable, header) => GetFieldValue<float>(data),
@@ -54,14 +55,12 @@ namespace DB2FileReaderLib.NET
 
         public void GetFields<T>(FieldCache<T>[] fields, T entry)
         {
-            for (int i = 0; i < fields.Length; ++i)
+            for (int i = 0; i < fields.Length; i++)
             {
                 FieldCache<T> info = fields[i];
                 if (info.IndexMapField)
                 {
-                    // set the real id
                     Id = GetFieldValue<int>(m_data);
-
                     info.Setter(entry, Convert.ChangeType(Id, info.Field.FieldType));
                     continue;
                 }
@@ -94,86 +93,58 @@ namespace DB2FileReaderLib.NET
 
         private static T[] GetFieldValueArray<T>(BitReader r, int cardinality) where T : struct
         {
-            T[] arr1 = new T[cardinality];
-            for (int i = 0; i < arr1.Length; i++)
-                arr1[i] = r.ReadValue64(FastStruct<T>.Size * 8).GetValue<T>();
+            T[] array = new T[cardinality];
+            for (int i = 0; i < array.Length; i++)
+                array[i] = r.ReadValue64(FastStruct<T>.Size * 8).GetValue<T>();
 
-            return arr1;
+            return array;
         }
 
-        public IDB2Row Clone()
+        public IDBRow Clone()
         {
-            return (IDB2Row)MemberwiseClone();
+            return (IDBRow)MemberwiseClone();
         }
     }
 
-    public class WDB2Reader : DB2Reader
+    class WDBCReader : BaseReader
     {
-        private const int HeaderSize = 28;
-        private const int ExtendedHeaderSize = 48;
-        private const uint WDB2FmtSig = 0x32424457; // WDB2
+        private const int HeaderSize = 20;
+        private const uint WDBCFmtSig = 0x43424457; // WDBC
 
-        public WDB2Reader(string dbcFile) : this(new FileStream(dbcFile, FileMode.Open)) { }
+        public WDBCReader(string dbcFile) : this(new FileStream(dbcFile, FileMode.Open)) { }
 
-        public WDB2Reader(Stream stream)
+        public WDBCReader(Stream stream)
         {
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
                 if (reader.BaseStream.Length < HeaderSize)
-                    throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
+                    throw new InvalidDataException(string.Format("WDBC file is corrupted!"));
 
                 uint magic = reader.ReadUInt32();
 
-                if (magic != WDB2FmtSig)
-                    throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
-
-                Flags |= DB2Flags.Index; // HACK
+                if (magic != WDBCFmtSig)
+                    throw new InvalidDataException(string.Format("WDBC file is corrupted!"));
 
                 RecordsCount = reader.ReadInt32();
                 FieldsCount = reader.ReadInt32();
                 RecordSize = reader.ReadInt32();
                 StringTableSize = reader.ReadInt32();
-                TableHash = reader.ReadUInt32();
-                uint build = reader.ReadUInt32();
-                uint timestamp = reader.ReadUInt32();
 
                 if (RecordsCount == 0)
                     return;
 
-                // Extended header 
-                if (build > 12880)
-                {
-                    if (reader.BaseStream.Length < ExtendedHeaderSize)
-                        throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
-
-                    MinIndex = reader.ReadInt32();
-                    MaxIndex = reader.ReadInt32();
-                    int locale = reader.ReadInt32();
-                    int copyTableSize = reader.ReadInt32();
-
-                    if (MaxIndex > 0)
-                    {
-                        int diff = MaxIndex - MinIndex + 1;
-                        reader.BaseStream.Position += diff * 4; // indicies uint[]
-                        reader.BaseStream.Position += diff * 2; // string lengths ushort[]
-                    }
-                }
-
                 recordsData = reader.ReadBytes(RecordsCount * RecordSize);
                 Array.Resize(ref recordsData, recordsData.Length + 8); // pad with extra zeros so we don't crash when reading
 
+                _Records.EnsureCapacity(RecordsCount);
                 for (int i = 0; i < RecordsCount; i++)
                 {
                     BitReader bitReader = new BitReader(recordsData) { Position = i * RecordSize * 8 };
-                    IDB2Row rec = new WDB2Row(this, bitReader, i);
-
-                    // HACK WDBC and WDB2 may not have an index 
-                    // so temporaryily use the ordinal and replace with the real id
-                    // if IndexAttribute exists on GetFields<>
+                    IDBRow rec = new WDBCRow(this, bitReader, i);
                     _Records.Add(i, rec);
                 }
 
-                m_stringsTable = new Dictionary<long, string>();
+                m_stringsTable = new Dictionary<long, string>(StringTableSize / 0x20);
                 for (int i = 0; i < StringTableSize;)
                 {
                     long oldPos = reader.BaseStream.Position;

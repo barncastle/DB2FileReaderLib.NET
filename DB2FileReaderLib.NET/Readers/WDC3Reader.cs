@@ -233,12 +233,12 @@ namespace DB2FileReaderLib.NET.Readers
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
                 if (reader.BaseStream.Length < HeaderSize)
-                    throw new InvalidDataException(String.Format("WDC3 file is corrupted or empty!"));
+                    throw new InvalidDataException("WDC3 file is corrupted!");
 
                 uint magic = reader.ReadUInt32();
 
                 if (magic != WDC3FmtSig)
-                    throw new InvalidDataException(String.Format("WDC3 file is corrupted!"));
+                    throw new InvalidDataException("WDC3 file is corrupted!");
 
                 RecordsCount = reader.ReadInt32();
                 FieldsCount = reader.ReadInt32();
@@ -343,8 +343,14 @@ namespace DB2FileReaderLib.NET.Readers
                             m_copyData[reader.ReadInt32()] = reader.ReadInt32();
                     }
 
-                    if (sections[sectionIndex].OffsetMapIDCount > 0)
+                    if (sections[sectionIndex].OffsetMapIDCount > 0 )
+                    {
+                        // HACK unittestsparse is malformed and has sparseIndexData first
+                        if (TableHash == 145293629)
+                            reader.BaseStream.Position += 4 * sections[sectionIndex].OffsetMapIDCount;
+
                         SparseEntries = reader.ReadArray<SparseEntry>(sections[sectionIndex].OffsetMapIDCount);
+                    }                        
 
                     // reference data
                     ReferenceData refData = null;

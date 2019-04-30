@@ -250,12 +250,12 @@ namespace DB2FileReaderLib.NET.Readers
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
                 if (reader.BaseStream.Length < HeaderSize)
-                    throw new InvalidDataException(String.Format("WDC2 file is corrupted or empty!"));
+                    throw new InvalidDataException("WDC2 file is corrupted!");
 
                 uint magic = reader.ReadUInt32();
 
                 if (magic != WDC2FmtSig && magic != CLS1FmtSig)
-                    throw new InvalidDataException(String.Format("WDC2 file is corrupted!"));
+                    throw new InvalidDataException("WDC2 file is corrupted!");
 
                 RecordsCount = reader.ReadInt32();
                 FieldsCount = reader.ReadInt32();

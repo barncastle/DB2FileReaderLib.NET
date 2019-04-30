@@ -119,12 +119,12 @@ namespace DB2FileReaderLib.NET.Readers
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
             {
                 if (reader.BaseStream.Length < HeaderSize)
-                    throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
+                    throw new InvalidDataException("WDB2 file is corrupted!");
 
                 uint magic = reader.ReadUInt32();
 
                 if (magic != WDB2FmtSig)
-                    throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
+                    throw new InvalidDataException("WDB2 file is corrupted!");
 
                 RecordsCount = reader.ReadInt32();
                 FieldsCount = reader.ReadInt32();
@@ -141,7 +141,7 @@ namespace DB2FileReaderLib.NET.Readers
                 if (build > 12880)
                 {
                     if (reader.BaseStream.Length < ExtendedHeaderSize)
-                        throw new InvalidDataException(string.Format("WDB2 file is corrupted!"));
+                        throw new InvalidDataException("WDB2 file is corrupted!");
 
                     MinIndex = reader.ReadInt32();
                     MaxIndex = reader.ReadInt32();

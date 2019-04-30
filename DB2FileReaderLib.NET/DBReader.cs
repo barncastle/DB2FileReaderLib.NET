@@ -71,7 +71,7 @@ namespace DB2FileReaderLib.NET
 
         public Storage<T> GetRecords<T>() where T : class, new() => new Storage<T>(this);
 
-        public void GetRecords<T>(IDictionary<int, T> storage) where T : class, new() => ReadRecords(storage);
+        public void PopulateRecords<T>(IDictionary<int, T> storage) where T : class, new() => ReadRecords(storage);
 
 
         protected virtual void ReadRecords<T>(IDictionary<int, T> storage) where T : class, new()

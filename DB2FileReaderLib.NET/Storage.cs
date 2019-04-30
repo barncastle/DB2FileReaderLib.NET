@@ -9,6 +9,6 @@ namespace DB2FileReaderLib.NET
 
         public Storage(Stream stream) : this(new DBReader(stream)) { }
 
-        public Storage(DBReader dbReader) => dbReader.GetRecords(this);
+        public Storage(DBReader dbReader) => dbReader.PopulateRecords(this);
     }
 }
